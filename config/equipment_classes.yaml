@@ -1,0 +1,8 @@
+names:
+  0: helmet
+  1: vest
+  2: gloves
+  3: goggles
+required_by_default:
+  - helmet
+  - vest
