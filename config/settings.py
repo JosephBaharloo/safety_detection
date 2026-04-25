@@ -10,6 +10,10 @@ PROJECT_ROOT: Path = Path(__file__).resolve().parents[1]
 CONFIG_DIR: Path = PROJECT_ROOT / "config"
 MODELS_DIR: Path = PROJECT_ROOT / "models"
 
+# A real YOLOv8 weights file is always larger than this.
+# The placeholder text file in the repo is only a few bytes.
+_MIN_MODEL_SIZE_BYTES: int = 100_000  # 100 KB
+
 
 @dataclass(frozen=True)
 class StreamConfig:
@@ -41,6 +45,10 @@ class AppSettings:
     class_map: dict[int, str]
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 def load_equipment_classes(path: Path | None = None) -> dict[int, str]:
     yaml_path: Path = path or (CONFIG_DIR / "equipment_classes.yaml")
     with yaml_path.open("r", encoding="utf-8") as handle:
@@ -56,12 +64,48 @@ def load_equipment_classes(path: Path | None = None) -> dict[int, str]:
     return class_map
 
 
+def _resolve_model_path() -> Path:
+    """Return the best available model path.
+
+    Priority:
+    1. models/best.pt  — if it exists AND is a real weights file (> 100 KB)
+    2. models/yolov8n.pt — pre-downloaded fallback (place manually in models/)
+    3. 'yolov8n.pt'    — last resort: let Ultralytics download it at runtime
+                         (requires internet on first run)
+
+    The placeholder text file that ships in the repo is only a few bytes,
+    so the size check correctly skips it and falls through to the fallback.
+    """
+    best_pt: Path = MODELS_DIR / "best.pt"
+    if best_pt.exists() and best_pt.stat().st_size > _MIN_MODEL_SIZE_BYTES:
+        return best_pt
+
+    # Prefer the locally cached yolov8n to avoid a runtime download
+    yolov8n_local: Path = MODELS_DIR / "yolov8n.pt"
+    if yolov8n_local.exists() and yolov8n_local.stat().st_size > _MIN_MODEL_SIZE_BYTES:
+        return yolov8n_local
+
+    # Fall back to Ultralytics auto-download (needs internet on first run)
+    return Path("yolov8n.pt")
+
+
+# ---------------------------------------------------------------------------
+# Public factory
+# ---------------------------------------------------------------------------
+
 def build_default_settings() -> AppSettings:
     class_map: dict[int, str] = load_equipment_classes()
-    required_defaults: tuple[str, ...] = tuple(
-        value
-        for value in ("helmet", "vest")
-        if value in set(class_map.values())
+
+    model_path: Path = _resolve_model_path()
+
+    # Only enforce equipment rules when best.pt (the custom-trained model) is
+    # present — yolov8n knows nothing about helmets / vests, so leave the list
+    # empty until real weights are ready.
+    using_custom_model: bool = model_path.name == "best.pt"
+    required_defaults: tuple[str, ...] = (
+        tuple(v for v in ("helmet", "vest") if v in set(class_map.values()))
+        if using_custom_model
+        else ()
     )
 
     streams: tuple[StreamConfig, ...] = (
@@ -73,8 +117,16 @@ def build_default_settings() -> AppSettings:
         ),
     )
 
-    detector_settings: DetectorSettings = DetectorSettings(model_path=MODELS_DIR / "best.pt")
-    alarm_settings: AlarmSettings = AlarmSettings(sound_path=CONFIG_DIR / "alarm.wav")
+    detector_settings: DetectorSettings = DetectorSettings(
+        model_path=model_path,
+        confidence_threshold=0.45,
+        iou_threshold=0.5,
+        image_size=640,
+    )
+    alarm_settings: AlarmSettings = AlarmSettings(
+        sound_path=CONFIG_DIR / "alarm.wav",
+        cooldown_seconds=2.0,
+    )
 
     return AppSettings(
         detector=detector_settings,
