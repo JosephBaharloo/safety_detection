@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from PyQt6.QtCore import Qt, pyqtSlot
-from PyQt6.QtWidgets import QLabel, QListWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QLabel, QListWidget, QPushButton, QVBoxLayout, QWidget
 
 
 class AlarmPanel(QWidget):
@@ -18,12 +18,16 @@ class AlarmPanel(QWidget):
         self._detail_label: QLabel = QLabel("No active alerts")
         self._detail_label.setWordWrap(True)
 
+        self._clear_button: QPushButton = QPushButton("Clear History")
+        self._clear_button.clicked.connect(self._clear_history)
+
         self._history_list: QListWidget = QListWidget()
         self._history_list.setAlternatingRowColors(True)
 
         layout: QVBoxLayout = QVBoxLayout(self)
         layout.addWidget(self._status_label)
         layout.addWidget(self._detail_label)
+        layout.addWidget(self._clear_button)
         layout.addWidget(self._history_list, stretch=1)
 
     @pyqtSlot(bool, str)
