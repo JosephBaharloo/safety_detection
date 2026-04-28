@@ -32,7 +32,7 @@ class SafetyDetectionController(QObject):
         self._app: QApplication = app
         self._settings: AppSettings = settings
         self._event_bus: EventBus = EventBus()
-        self._window: MainWindow = MainWindow()
+        self._window: MainWindow = MainWindow(alarm_sound_path=self._settings.alarm.sound_path)
         self._workers: dict[str, StreamWorker] = {}
         self._is_shutting_down: bool = False
 

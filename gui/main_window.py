@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 
 from PyQt6.QtCore import pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QAction, QCloseEvent, QIcon
@@ -33,7 +34,7 @@ class MainWindow(QMainWindow):
     stop_requested = pyqtSignal()
     close_requested = pyqtSignal()
 
-    def __init__(self) -> None:
+    def __init__(self, alarm_sound_path: Path | None = None) -> None:
         super().__init__()
         self.setWindowTitle("Safety Equipment Detection")
         self.resize(1400, 820)
@@ -65,6 +66,8 @@ class MainWindow(QMainWindow):
         self._streams_grid: QGridLayout = QGridLayout(self._streams_container)
 
         self._alarm_panel: AlarmPanel = AlarmPanel()
+        if alarm_sound_path is not None:
+            self._alarm_panel.load_alarm_sound(alarm_sound_path)
 
         splitter: QSplitter = QSplitter()
         splitter.addWidget(self._streams_container)
@@ -142,6 +145,9 @@ class MainWindow(QMainWindow):
     @pyqtSlot(bool, str)
     def set_alarm_state(self, active: bool, message: str) -> None:
         self._alarm_panel.set_alarm_state(active, message)
+
+    def set_alarm_sound_path(self, sound_path: Path | str) -> None:
+        self._alarm_panel.load_alarm_sound(sound_path)
 
     @pyqtSlot(str)
     def append_alarm_log(self, message: str) -> None:

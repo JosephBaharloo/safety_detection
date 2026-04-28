@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import QUrl, Qt, pyqtSlot
+from PyQt6.QtMultimedia import QSoundEffect
 from PyQt6.QtWidgets import QLabel, QListWidget, QPushButton, QVBoxLayout, QWidget
 
 
 class AlarmPanel(QWidget):
-    """Displays global alarm state and event history."""
+    """Displays global alarm state and event history, with optional audio alerts."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -24,20 +26,43 @@ class AlarmPanel(QWidget):
         self._history_list: QListWidget = QListWidget()
         self._history_list.setAlternatingRowColors(True)
 
+        self._alarm_sound: QSoundEffect = QSoundEffect(self)
+        self._alarm_sound.setLoopCount(QSoundEffect.Loop.Infinite)
+        self._alarm_sound.setVolume(0.75)
+        self._alarm_sound_available: bool = False
+
         layout: QVBoxLayout = QVBoxLayout(self)
         layout.addWidget(self._status_label)
         layout.addWidget(self._detail_label)
         layout.addWidget(self._clear_button)
         layout.addWidget(self._history_list, stretch=1)
 
+    def load_alarm_sound(self, sound_path: Path | str | None) -> None:
+        if sound_path is None:
+            self._alarm_sound_available = False
+            self._alarm_sound.setSource(QUrl())
+            return
+
+        source_path = Path(sound_path)
+        if source_path.is_file():
+            self._alarm_sound.setSource(QUrl.fromLocalFile(str(source_path)))
+            self._alarm_sound_available = True
+        else:
+            self._alarm_sound_available = False
+            self._alarm_sound.setSource(QUrl())
+
     @pyqtSlot(bool, str)
     def set_alarm_state(self, active: bool, message: str) -> None:
         if active:
             self._status_label.setText("System status: ALERT")
             self._status_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #b71c1c;")
+            if self._alarm_sound_available and not self._alarm_sound.isPlaying():
+                self._alarm_sound.play()
         else:
             self._status_label.setText("System status: Normal")
             self._status_label.setStyleSheet("font-size: 14px; font-weight: 700; color: #1f7a3e;")
+            if self._alarm_sound.isPlaying():
+                self._alarm_sound.stop()
 
         self._detail_label.setText(message)
         self.append_event(message)
@@ -48,3 +73,6 @@ class AlarmPanel(QWidget):
         self._history_list.insertItem(0, f"[{timestamp}] {message}")
         if self._history_list.count() > 200:
             self._history_list.takeItem(self._history_list.count() - 1)
+
+    def _clear_history(self) -> None:
+        self._history_list.clear()
