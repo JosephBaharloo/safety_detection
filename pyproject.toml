@@ -15,3 +15,5 @@ dependencies = [
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+# Note: model weights are intentionally not stored in the repository. Use `scripts/get_model.py` to fetch them.
