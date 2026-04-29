@@ -27,7 +27,7 @@ class AlarmPanel(QWidget):
         self._history_list.setAlternatingRowColors(True)
 
         self._alarm_sound: QSoundEffect = QSoundEffect(self)
-        self._alarm_sound.setLoopCount(QSoundEffect.Loop.Infinite)
+        self._alarm_sound.setLoopCount(-1)
         self._alarm_sound.setVolume(0.75)
         self._alarm_sound_available: bool = False
 
