@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from PyQt6.QtCore import QUrl, Qt, pyqtSlot
+from PyQt6.QtCore import QUrl, pyqtSlot
 from PyQt6.QtMultimedia import QSoundEffect
 from PyQt6.QtWidgets import QLabel, QListWidget, QPushButton, QVBoxLayout, QWidget
 
@@ -27,7 +27,7 @@ class AlarmPanel(QWidget):
         self._history_list.setAlternatingRowColors(True)
 
         self._alarm_sound: QSoundEffect = QSoundEffect(self)
-        self._alarm_sound.setLoopCount(-1)
+        self._alarm_sound.setLoopCount(0)  # 0 = infinite in QSoundEffect
         self._alarm_sound.setVolume(0.75)
         self._alarm_sound_available: bool = False
 
