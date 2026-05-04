@@ -29,7 +29,19 @@ class StreamCell(QWidget):
         self._video_label: QLabel = QLabel("Waiting for frames...")
         self._video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._video_label.setMinimumSize(320, 240)
-        self._video_label.setStyleSheet("background: #101418; color: #d7dbe0; border-radius: 8px;")
+        self._normal_video_style: str = (
+            "background: #101418; color: #d7dbe0; border-radius: 8px; "
+            "border: 2px solid transparent;"
+        )
+        self._alarm_video_style: str = (
+            "background: #101418; color: #d7dbe0; border-radius: 8px; "
+            "border: 4px solid #b71c1c;"
+        )
+        self._compliant_video_style: str = (
+            "background: #101418; color: #d7dbe0; border-radius: 8px; "
+            "border: 4px solid #1f7a3e;"
+        )
+        self._video_label.setStyleSheet(self._normal_video_style)
 
         layout: QVBoxLayout = QVBoxLayout(self)
         layout.addWidget(self._title_label)
@@ -86,10 +98,22 @@ class StreamCell(QWidget):
     @pyqtSlot(object)
     def show_anomaly(self, missing_items: Sequence[str]) -> None:
         if missing_items:
+            self._set_border("alarm")
             self._overlay.show_message(f"Missing: {', '.join(missing_items)}")
-            return
-        self._overlay.clear_message()
+        else:
+            self._set_border("compliant")
+            self._overlay.clear_message()
 
     @pyqtSlot()
     def clear_anomaly(self) -> None:
+        self._set_border("compliant")
         self._overlay.clear_message()
+
+    def _set_border(self, mode: str) -> None:
+        if mode == "alarm":
+            style = self._alarm_video_style
+        elif mode == "compliant":
+            style = self._compliant_video_style
+        else:
+            style = self._normal_video_style
+        self._video_label.setStyleSheet(style)

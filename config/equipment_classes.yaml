@@ -3,6 +3,7 @@ names:
   1: vest
   2: gloves
   3: goggles
-required_by_default:
-  - helmet
-  - vest
+required_defaults: tuple[str, ...] = (
+    tuple(v for v in ("helmet", "vest", "goggles") if v in set(class_map.values()))
+    if using_custom_model
+    else ()
