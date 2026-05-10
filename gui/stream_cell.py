@@ -20,6 +20,9 @@ class StreamCell(QWidget):
         super().__init__(parent)
         self.stream_id: str = stream_id
 
+        # Tracks current missing equipment so draw_detections can color boxes
+        self._missing_equipment: tuple[str, ...] = ()
+
         self._title_label: QLabel = QLabel(display_name)
         self._title_label.setStyleSheet("font-size: 13px; font-weight: 700;")
 
@@ -45,7 +48,8 @@ class StreamCell(QWidget):
 
     @pyqtSlot(object, object)
     def update_frame(self, frame: np.ndarray, detections: Sequence[Detection]) -> None:
-        rendered: np.ndarray = draw_detections(frame, detections)
+        # Pass current missing_equipment so person boxes turn red on anomaly
+        rendered: np.ndarray = draw_detections(frame, detections, self._missing_equipment)
         rgb_frame: np.ndarray = cv2.cvtColor(rendered, cv2.COLOR_BGR2RGB)
 
         height: int
@@ -74,10 +78,10 @@ class StreamCell(QWidget):
     @pyqtSlot(str)
     def set_status(self, status: str) -> None:
         palette: dict[str, str] = {
-            "idle": "#5f6368",
+            "idle":    "#5f6368",
             "running": "#1f7a3e",
             "stopped": "#5f6368",
-            "error": "#b71c1c",
+            "error":   "#b71c1c",
         }
         color: str = palette.get(status, "#5f6368")
         self._status_label.setText(f"Status: {status}")
@@ -85,11 +89,13 @@ class StreamCell(QWidget):
 
     @pyqtSlot(object)
     def show_anomaly(self, missing_items: Sequence[str]) -> None:
+        self._missing_equipment = tuple(missing_items)
         if missing_items:
             self._overlay.show_message(f"Missing: {', '.join(missing_items)}")
-            return
-        self._overlay.clear_message()
+        else:
+            self._overlay.clear_message()
 
     @pyqtSlot()
     def clear_anomaly(self) -> None:
+        self._missing_equipment = ()
         self._overlay.clear_message()

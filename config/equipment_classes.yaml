@@ -1,5 +1,6 @@
 names:
-  0: helmet
+ # 0: helmet
+  0: person
   1: vest
   2: gloves
   3: goggles
