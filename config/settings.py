@@ -74,25 +74,52 @@ def build_default_settings() -> AppSettings:
     class_map: dict[int, str] = load_equipment_classes()
     model_path: Path = _resolve_model_path()
 
-    # -----------------------------------------------------------------------
-    # TEST MODE — forces "vest" as required so anomaly always triggers.
-    # Lets you verify Alert & Logging (FR-4.2 / FR-4.3) without best.pt.
+    # TEST MODE — switch to PRODUCTION when best.pt is ready
     required_defaults: tuple[str, ...] = ("helmet", "vest", "goggles", "gloves")
 
-    # PRODUCTION — switch back when best.pt (custom trained model) is ready:
+    # PRODUCTION:
     # using_custom_model: bool = model_path.name == "best.pt"
     # required_defaults: tuple[str, ...] = (
     #     tuple(v for v in ("helmet", "vest") if v in set(class_map.values()))
     #     if using_custom_model
     #     else ()
     # )
-    # -----------------------------------------------------------------------
 
     streams: tuple[StreamConfig, ...] = (
         StreamConfig(
             stream_id="cam_1",
             source=0,
-            display_name="Entrance Camera",
+            display_name="Camera 1",
+            required_equipment=required_defaults,
+        ),
+        StreamConfig(
+            stream_id="cam_2",
+            source="videos/cam2.mp4",
+            display_name="Camera 2",
+            required_equipment=required_defaults,
+        ),
+        StreamConfig(
+            stream_id="cam_3",
+            source="videos/cam3.mp4",
+            display_name="Camera 3",
+            required_equipment=required_defaults,
+        ),
+        StreamConfig(
+            stream_id="cam_4",
+            source="videos/cam4.mp4",
+            display_name="Camera 4",
+            required_equipment=required_defaults,
+        ),
+        StreamConfig(
+            stream_id="cam_5",
+            source="videos/cam5.mp4",
+            display_name="Camera 5",
+            required_equipment=required_defaults,
+        ),
+        StreamConfig(
+            stream_id="cam_6",
+            source="videos/cam6.mp4",
+            display_name="Camera 6 ",
             required_equipment=required_defaults,
         ),
     )
@@ -104,7 +131,7 @@ def build_default_settings() -> AppSettings:
         image_size=640,
     )
     alarm_settings: AlarmSettings = AlarmSettings(
-        sound_path=CONFIG_DIR / "alarm.wav",
+        sound_path=CONFIG_DIR / "alarm.mp3",
         cooldown_seconds=2.0,
     )
 
