@@ -26,9 +26,8 @@ STREAM_ERROR_TOPIC = "stream.error"
 _TARGET_FPS: float = 30.0
 _FRAME_INTERVAL: float = 1.0 / _TARGET_FPS
 
-# TEST: "helmet" added because yolov8n.pt detects faces/heads as helmet.
-# PRODUCTION: remove "helmet" when best.pt is ready — it will detect "person" directly.
-_PERSON_LABELS: frozenset[str] = frozenset({"person", "worker", "human","helmet"})
+# Person detection labels: detects actual people in the scene
+_PERSON_LABELS: frozenset[str] = frozenset({"person", "worker", "human"})
 
 
 @dataclass(frozen=True)
@@ -71,10 +70,12 @@ class StreamWorker(QThread):
 
     def run(self) -> None:
         self._stop_requested.clear()
+        LOGGER.info("StreamWorker.run() started for %s", self._stream_config.stream_id)
         source: VideoSource = VideoSource(self._stream_config.source)
 
         if not source.open():
             message: str = f"Cannot open source: {self._stream_config.source}"
+            LOGGER.error("Cannot open video source: %s", self._stream_config.source)
             self.source_failed.emit(self._stream_config.stream_id, message)
             self.status_changed.emit(self._stream_config.stream_id, "error")
             self._event_bus.publish(
@@ -83,6 +84,7 @@ class StreamWorker(QThread):
             )
             return
 
+        LOGGER.info("Video source opened successfully: %s", self._stream_config.source)
         self.status_changed.emit(self._stream_config.stream_id, "running")
         self._event_bus.publish(
             STREAM_STARTED_TOPIC,
@@ -90,6 +92,7 @@ class StreamWorker(QThread):
         )
 
         try:
+            frame_count: int = 0
             while not self._stop_requested.is_set():
                 t0: float = time.monotonic()
 
@@ -99,6 +102,13 @@ class StreamWorker(QThread):
                     continue
 
                 detections: list[Detection] = self._detector.detect(frame)
+                frame_count += 1
+                if frame_count % 30 == 0:  # Her 30 frame'de (1 saniye) log
+                    LOGGER.debug(
+                        "Frame %d: %d detections found",
+                        frame_count,
+                        len(detections),
+                    )
                 self.frame_ready.emit(self._stream_config.stream_id, frame, detections)
                 self._evaluate_anomaly(detections)
 
@@ -132,6 +142,12 @@ class StreamWorker(QThread):
         if missing:
             if not self._anomaly_active:
                 self._anomaly_active = True
+                LOGGER.warning(
+                    "%s: ANOMALY DETECTED - missing %s, observed %s",
+                    self._stream_config.stream_id,
+                    missing,
+                    observed,
+                )
                 self._event_bus.publish(
                     ANOMALY_DETECTED_TOPIC,
                     AnomalyEvent(
@@ -145,6 +161,10 @@ class StreamWorker(QThread):
         else:
             if self._anomaly_active:
                 self._anomaly_active = False
+                LOGGER.info(
+                    "%s: Anomaly cleared - all equipment present",
+                    self._stream_config.stream_id,
+                )
                 self._event_bus.publish(
                     ANOMALY_CLEARED_TOPIC,
                     AnomalyEvent(

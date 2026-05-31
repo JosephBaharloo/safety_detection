@@ -10,8 +10,7 @@ PROJECT_ROOT: Path = Path(__file__).resolve().parents[1]
 CONFIG_DIR: Path = PROJECT_ROOT / "config"
 MODELS_DIR: Path = PROJECT_ROOT / "models"
 
-_MIN_MODEL_SIZE_BYTES: int = 100_000  # 100 KB
-
+_MIN_MODEL_SIZE_BYTES: int = 100_000
 
 @dataclass(frozen=True)
 class StreamConfig:
@@ -20,7 +19,6 @@ class StreamConfig:
     display_name: str
     required_equipment: tuple[str, ...]
 
-
 @dataclass(frozen=True)
 class DetectorSettings:
     model_path: Path
@@ -28,12 +26,10 @@ class DetectorSettings:
     iou_threshold: float = 0.5
     image_size: int = 640
 
-
 @dataclass(frozen=True)
 class AlarmSettings:
     sound_path: Path
     cooldown_seconds: float = 2.0
-
 
 @dataclass(frozen=True)
 class AppSettings:
@@ -42,8 +38,7 @@ class AppSettings:
     streams: tuple[StreamConfig, ...]
     class_map: dict[int, str]
 
-
-def load_equipment_classes(path: Path | None = None) -> dict[int, str]:
+def load_equipment_classes(path: Path | None = None) -> tuple[dict[int, str], tuple[str, ...]]:
     yaml_path: Path = path or (CONFIG_DIR / "equipment_classes.yaml")
     with yaml_path.open("r", encoding="utf-8") as handle:
         raw_data: dict[str, Any] = yaml.safe_load(handle) or {}
@@ -55,8 +50,15 @@ def load_equipment_classes(path: Path | None = None) -> dict[int, str]:
     class_map: dict[int, str] = {int(key): str(value) for key, value in names_raw.items()}
     if not class_map:
         raise ValueError("At least one class must be defined in equipment_classes.yaml.")
-    return class_map
 
+    required_raw: Any = raw_data.get("required_by_default", ())
+    if not isinstance(required_raw, (list, tuple)):
+        required_raw = ()
+
+    required_by_default: tuple[str, ...] = tuple(
+        str(item) for item in required_raw if isinstance(item, str)
+    )
+    return class_map, required_by_default
 
 def _resolve_model_path() -> Path:
     best_pt: Path = MODELS_DIR / "best.pt"
@@ -69,57 +71,46 @@ def _resolve_model_path() -> Path:
 
     return Path("yolov8n.pt")
 
-
 def build_default_settings() -> AppSettings:
-    class_map: dict[int, str] = load_equipment_classes()
+    class_map, required_by_default = load_equipment_classes()
     model_path: Path = _resolve_model_path()
 
-    # TEST MODE — switch to PRODUCTION when best.pt is ready
-    required_defaults: tuple[str, ...] = ("helmet", "vest", "goggles", "gloves")
+    using_custom_model: bool = True
+    required_defaults: tuple[str, ...] = (
+        tuple(
+            required
+            for required in required_by_default
+            if required in set(class_map.values())
+        )
+        if using_custom_model
+        else ()
+    )
 
-    # PRODUCTION:
-    # using_custom_model: bool = model_path.name == "best.pt"
-    # required_defaults: tuple[str, ...] = (
-    #     tuple(v for v in ("helmet", "vest") if v in set(class_map.values()))
-    #     if using_custom_model
-    #     else ()
-    # )
+    videos_dir: Path = PROJECT_ROOT / "videos"
 
     streams: tuple[StreamConfig, ...] = (
         StreamConfig(
             stream_id="cam_1",
-            source=0,
+            source=str((videos_dir / "kamera_1.mp4").resolve()),
             display_name="Camera 1",
             required_equipment=required_defaults,
         ),
         StreamConfig(
             stream_id="cam_2",
-            source="videos/cam2.mp4",
+            source=str((videos_dir / "kamera_2.mp4").resolve()),
             display_name="Camera 2",
             required_equipment=required_defaults,
         ),
         StreamConfig(
-            stream_id="cam_3",
-            source="videos/cam3.mp4",
-            display_name="Camera 3",
-            required_equipment=required_defaults,
-        ),
-        StreamConfig(
             stream_id="cam_4",
-            source="videos/cam4.mp4",
+            source=str((videos_dir / "kamera_4.mp4").resolve()),
             display_name="Camera 4",
             required_equipment=required_defaults,
         ),
         StreamConfig(
-            stream_id="cam_5",
-            source="videos/cam5.mp4",
-            display_name="Camera 5",
-            required_equipment=required_defaults,
-        ),
-        StreamConfig(
             stream_id="cam_6",
-            source="videos/cam6.mp4",
-            display_name="Camera 6 ",
+            source=str((videos_dir / "kamera_6.mp4").resolve()),
+            display_name="Camera 6",
             required_equipment=required_defaults,
         ),
     )

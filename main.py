@@ -58,19 +58,24 @@ class SafetyDetectionController(QObject):
 
     @pyqtSlot()
     def start_streams(self) -> None:
+        LOGGER.info("start_streams() called")
         for worker in self._workers.values():
             if not worker.isRunning():
+                LOGGER.info("Starting worker: %s", worker)
                 worker.start()
         self._window.append_alarm_log("Monitoring started")
 
     @pyqtSlot()
     def stop_streams(self) -> None:
+        LOGGER.info("stop_streams() called")
         for worker in self._workers.values():
             if worker.isRunning():
+                LOGGER.info("Stopping worker: %s", worker)
                 worker.stop()
 
         for worker in self._workers.values():
             if worker.isRunning():
+                LOGGER.info("Waiting for worker to finish: %s", worker)
                 worker.wait(2000)
 
         self._window.append_alarm_log("Monitoring stopped")

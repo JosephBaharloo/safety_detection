@@ -71,10 +71,14 @@ class AlarmManager(QObject):
     def start(self) -> None:
         self._event_bus.subscribe(ANOMALY_DETECTED_TOPIC, self._on_anomaly_detected)
         self._event_bus.subscribe(ANOMALY_CLEARED_TOPIC, self._on_anomaly_cleared)
+        self._event_bus.subscribe(STREAM_ERROR_TOPIC, self._on_stream_error)
+        LOGGER.info("AlarmManager started - subscribed to anomaly and stream error topics")
 
     def stop(self) -> None:
         self._event_bus.unsubscribe(ANOMALY_DETECTED_TOPIC, self._on_anomaly_detected)
         self._event_bus.unsubscribe(ANOMALY_CLEARED_TOPIC, self._on_anomaly_cleared)
+        self._event_bus.unsubscribe(STREAM_ERROR_TOPIC, self._on_stream_error)
+        LOGGER.info("AlarmManager stopped")
 
     # ------------------------------------------------------------------
     # Event handlers
@@ -134,13 +138,8 @@ class AlarmManager(QObject):
             state="anomaly_cleared",
             message="compliance restored",
         )
-    def start(self) -> None:
-        self._event_bus.subscribe(ANOMALY_DETECTED_TOPIC, self._on_anomaly_detected)
-        self._event_bus.subscribe(ANOMALY_CLEARED_TOPIC, self._on_anomaly_cleared)
-        self._event_bus.subscribe(STREAM_ERROR_TOPIC, self._on_stream_error)  # ← ekle
-
-    
 
     def _on_stream_error(self, event: StreamStateEvent) -> None:
         message = f"ALERT: {event.stream_name} — {event.message}"
         self.alarm_state_changed.emit(True, message)
+        LOGGER.warning("Stream error: %s", message)
