@@ -97,7 +97,7 @@ def build_default_settings() -> AppSettings:
         ),
         StreamConfig(
             stream_id="cam_2",
-            source=0,  # webcam
+            source=str((videos_dir / "kamera_2.mp4").resolve()),
             display_name="Camera 2",
             required_equipment=required_defaults,
         ),
