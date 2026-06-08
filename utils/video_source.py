@@ -41,10 +41,7 @@ class VideoSource:
         self._failed_reads: int = 0
         self._reconnect_count: int = 0
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
+   
     def open(self) -> bool:
         """Open the video source. Returns True on success."""
         self._capture = cv2.VideoCapture(self._source)
@@ -76,7 +73,7 @@ class VideoSource:
             self._failed_reads = 0  # reset counter on good read
             return frame
 
-        # Failed read
+        
         self._failed_reads += 1
         LOGGER.warning(
             "Failed read #%d from source: %s",
@@ -92,7 +89,7 @@ class VideoSource:
             )
             reconnected: bool = self._reconnect()
             if not reconnected:
-                return None  # caller (StreamWorker) will handle error
+                return None  
             self._failed_reads = 0
 
         return None
@@ -108,9 +105,6 @@ class VideoSource:
     def is_open(self) -> bool:
         return self._capture is not None and self._capture.isOpened()
 
-    # ------------------------------------------------------------------
-    # Reconnect logic — NFR-3.1
-    # ------------------------------------------------------------------
 
     def _reconnect(self) -> bool:
         """Try to reopen the source after a connection loss.

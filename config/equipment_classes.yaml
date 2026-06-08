@@ -1,7 +1,11 @@
 names:
-  0: person
-  1: vest
-  2: gloves
-  3: goggles
+  0: Fall-Detected
+  1: Hardhat
+  2: NO-Hardhat
+  3: no_safety_vest
+  4: person
+  5: safety_vest
+
 required_by_default:
-  - vest
+  - Hardhat
+  - safety_vest

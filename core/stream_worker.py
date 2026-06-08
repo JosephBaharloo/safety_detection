@@ -26,8 +26,11 @@ STREAM_ERROR_TOPIC = "stream.error"
 _TARGET_FPS: float = 30.0
 _FRAME_INTERVAL: float = 1.0 / _TARGET_FPS
 
-# Person detection labels: detects actual people in the scene
-_PERSON_LABELS: frozenset[str] = frozenset({"person", "worker", "human"})
+_VIOLATION_LABELS: frozenset[str] = frozenset({
+    "NO-Hardhat",
+    "no_safety_vest",
+    "Fall-Detected",
+})
 
 
 @dataclass(frozen=True)
@@ -49,22 +52,15 @@ class StreamStateEvent:
 
 
 class StreamWorker(QThread):
-    """Captures frames and runs detection for one stream on its own thread."""
-
     frame_ready = pyqtSignal(str, object, object)
     status_changed = pyqtSignal(str, str)
     source_failed = pyqtSignal(str, str)
 
-    def __init__(
-        self,
-        stream_config: StreamConfig,
-        detector: DetectorStrategy,
-        event_bus: EventBus,
-    ) -> None:
+    def __init__(self, stream_config: StreamConfig, detector: DetectorStrategy, event_bus: EventBus) -> None:
         super().__init__()
-        self._stream_config: StreamConfig = stream_config
-        self._detector: DetectorStrategy = detector
-        self._event_bus: EventBus = event_bus
+        self._stream_config = stream_config
+        self._detector = detector
+        self._event_bus = event_bus
         self._stop_requested: Event = Event()
         self._anomaly_active: bool = False
 
@@ -74,27 +70,21 @@ class StreamWorker(QThread):
         source: VideoSource = VideoSource(self._stream_config.source)
 
         if not source.open():
-            message: str = f"Cannot open source: {self._stream_config.source}"
+            message = f"Cannot open source: {self._stream_config.source}"
             LOGGER.error("Cannot open video source: %s", self._stream_config.source)
             self.source_failed.emit(self._stream_config.stream_id, message)
             self.status_changed.emit(self._stream_config.stream_id, "error")
-            self._event_bus.publish(
-                STREAM_ERROR_TOPIC,
-                self._build_state_event("error", message),
-            )
+            self._event_bus.publish(STREAM_ERROR_TOPIC, self._build_state_event("error", message))
             return
 
         LOGGER.info("Video source opened successfully: %s", self._stream_config.source)
         self.status_changed.emit(self._stream_config.stream_id, "running")
-        self._event_bus.publish(
-            STREAM_STARTED_TOPIC,
-            self._build_state_event("running", "stream started"),
-        )
+        self._event_bus.publish(STREAM_STARTED_TOPIC, self._build_state_event("running", "stream started"))
 
         try:
-            frame_count: int = 0
+            frame_count = 0
             while not self._stop_requested.is_set():
-                t0: float = time.monotonic()
+                t0 = time.monotonic()
 
                 frame: np.ndarray | None = source.read()
                 if frame is None:
@@ -103,34 +93,25 @@ class StreamWorker(QThread):
 
                 detections: list[Detection] = self._detector.detect(frame)
                 frame_count += 1
-                if frame_count % 30 == 0:  # Her 30 frame'de (1 saniye) log
-                    LOGGER.debug(
-                        "Frame %d: %d detections found",
-                        frame_count,
-                        len(detections),
-                    )
+                if frame_count % 30 == 0:
+                    LOGGER.debug("Frame %d: %d detections found", frame_count, len(detections))
+
                 self.frame_ready.emit(self._stream_config.stream_id, frame, detections)
                 self._evaluate_anomaly(detections)
 
-                elapsed: float = time.monotonic() - t0
-                sleep_for: float = _FRAME_INTERVAL - elapsed
+                elapsed = time.monotonic() - t0
+                sleep_for = _FRAME_INTERVAL - elapsed
                 if sleep_for > 0:
                     time.sleep(sleep_for)
 
         except Exception as exc:  # noqa: BLE001
             LOGGER.exception("Unexpected worker error for %s", self._stream_config.stream_id)
             self.status_changed.emit(self._stream_config.stream_id, "error")
-            self._event_bus.publish(
-                STREAM_ERROR_TOPIC,
-                self._build_state_event("error", str(exc)),
-            )
+            self._event_bus.publish(STREAM_ERROR_TOPIC, self._build_state_event("error", str(exc)))
         finally:
             source.release()
             self.status_changed.emit(self._stream_config.stream_id, "stopped")
-            self._event_bus.publish(
-                STREAM_STOPPED_TOPIC,
-                self._build_state_event("stopped", "stream stopped"),
-            )
+            self._event_bus.publish(STREAM_STOPPED_TOPIC, self._build_state_event("stopped", "stream stopped"))
 
     def stop(self) -> None:
         self._stop_requested.set()
@@ -142,12 +123,7 @@ class StreamWorker(QThread):
         if missing:
             if not self._anomaly_active:
                 self._anomaly_active = True
-                LOGGER.warning(
-                    "%s: ANOMALY DETECTED - missing %s, observed %s",
-                    self._stream_config.stream_id,
-                    missing,
-                    observed,
-                )
+                LOGGER.warning("%s: ANOMALY DETECTED - violations: %s", self._stream_config.stream_id, missing)
                 self._event_bus.publish(
                     ANOMALY_DETECTED_TOPIC,
                     AnomalyEvent(
@@ -161,10 +137,7 @@ class StreamWorker(QThread):
         else:
             if self._anomaly_active:
                 self._anomaly_active = False
-                LOGGER.info(
-                    "%s: Anomaly cleared - all equipment present",
-                    self._stream_config.stream_id,
-                )
+                LOGGER.info("%s: Anomaly cleared", self._stream_config.stream_id)
                 self._event_bus.publish(
                     ANOMALY_CLEARED_TOPIC,
                     AnomalyEvent(
@@ -177,18 +150,7 @@ class StreamWorker(QThread):
                 )
 
     def _get_missing_equipment(self, detections: list[Detection]) -> tuple[str, ...]:
-        person_present: bool = any(
-            d.label.lower() in _PERSON_LABELS for d in detections
-        )
-        if not person_present:
-            return ()
-
-        observed_labels: set[str] = {d.label for d in detections}
-        return tuple(
-            required
-            for required in self._stream_config.required_equipment
-            if required not in observed_labels
-        )
+        return tuple(d.label for d in detections if d.label in _VIOLATION_LABELS)
 
     def _build_state_event(self, state: str, message: str) -> StreamStateEvent:
         return StreamStateEvent(
@@ -208,16 +170,14 @@ DetectorBuilder = Callable[[StreamConfig], DetectorStrategy]
 
 
 class StreamWorkerFactory:
-    """Factory pattern for creating stream workers with swappable detectors."""
-
     def __init__(self, event_bus: EventBus, detector_builder: DetectorBuilder) -> None:
-        self._event_bus: EventBus = event_bus
-        self._detector_builder: DetectorBuilder = detector_builder
+        self._event_bus = event_bus
+        self._detector_builder = detector_builder
 
     def create(self, stream_config: StreamConfig) -> StreamWorker:
-        detector: DetectorStrategy = self._detector_builder(stream_config)
-        return StreamWorker(
-            stream_config=stream_config,
-            detector=detector,
-            event_bus=self._event_bus,
-        )
+        detector = self._detector_builder(stream_config)
+        return StreamWorker(stream_config=stream_config, detector=detector, event_bus=self._event_bus)
+    def _evaluate_anomaly(self, detections: list[Detection]) -> None:
+    # GEÇİCİ DEBUG
+        if detections:
+            print(f"[DEBUG] {self._stream_config.stream_id}: {[(d.label, round(d.confidence,2)) for d in detections]}")

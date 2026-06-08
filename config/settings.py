@@ -61,7 +61,7 @@ def load_equipment_classes(path: Path | None = None) -> tuple[dict[int, str], tu
     return class_map, required_by_default
 
 def _resolve_model_path() -> Path:
-    best_pt: Path = MODELS_DIR / "best.pt"
+    best_pt: Path = MODELS_DIR / "epoch50.pt"
     if best_pt.exists() and best_pt.stat().st_size > _MIN_MODEL_SIZE_BYTES:
         return best_pt
 
@@ -97,20 +97,20 @@ def build_default_settings() -> AppSettings:
         ),
         StreamConfig(
             stream_id="cam_2",
-            source=str((videos_dir / "kamera_2.mp4").resolve()),
+            source=0,  # webcam
             display_name="Camera 2",
             required_equipment=required_defaults,
         ),
         StreamConfig(
             stream_id="cam_4",
             source=str((videos_dir / "kamera_4.mp4").resolve()),
-            display_name="Camera 4",
+            display_name="Camera 3",
             required_equipment=required_defaults,
         ),
         StreamConfig(
             stream_id="cam_6",
             source=str((videos_dir / "kamera_6.mp4").resolve()),
-            display_name="Camera 6",
+            display_name="Camera 4",
             required_equipment=required_defaults,
         ),
     )
