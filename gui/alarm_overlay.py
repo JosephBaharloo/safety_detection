@@ -10,16 +10,18 @@ class AlarmOverlay(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self.setStyleSheet("background-color: rgba(210, 25, 25, 150); border-radius: 6px;")
+        self.setStyleSheet(
+            "QFrame { background-color: rgba(210, 25, 25, 220); border-radius: 6px; }"
+        )
 
         self._label: QLabel = QLabel(self)
         self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._label.setStyleSheet(
-            "color: white; font-size: 16px; font-weight: 700; padding: 8px;"
+            "color: white; font-size: 14px; font-weight: 700; padding: 4px 6px;"
         )
 
         layout: QVBoxLayout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setContentsMargins(4, 4, 4, 4)
         layout.addWidget(self._label)
 
         self.hide()
@@ -27,6 +29,7 @@ class AlarmOverlay(QFrame):
     @pyqtSlot(str)
     def show_message(self, message: str) -> None:
         self._label.setText(message)
+        self.adjustSize()
         self.show()
 
     @pyqtSlot()

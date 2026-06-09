@@ -128,12 +128,12 @@ class MainWindow(QMainWindow):
             return
         cell.set_status(status)
 
-    @pyqtSlot(str, object)
-    def show_anomaly(self, stream_id: str, missing_items: Sequence[str]) -> None:
+    @pyqtSlot(str, object, object)
+    def show_anomaly(self, stream_id: str, missing_items: Sequence[str], observed_items: Sequence[str] = ()) -> None:
         cell: StreamCell | None = self._stream_cells.get(stream_id)
         if cell is None:
             return
-        cell.show_anomaly(missing_items)
+        cell.show_anomaly(missing_items, observed_items)
 
     @pyqtSlot(str)
     def clear_anomaly(self, stream_id: str) -> None:

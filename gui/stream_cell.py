@@ -11,6 +11,9 @@ from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from core.detector import Detection
 from gui.alarm_overlay import AlarmOverlay
 from utils.draw import draw_detections
+from utils.logger import get_logger
+
+LOGGER = get_logger(__name__)
 
 
 class StreamCell(QWidget):
@@ -40,14 +43,23 @@ class StreamCell(QWidget):
         layout.addWidget(self._video_label, stretch=1)
 
         self._overlay: AlarmOverlay = AlarmOverlay(self._video_label)
-        self._overlay.setGeometry(self._video_label.rect())
+        self._overlay.move(12, 12)
+        self._overlay.raise_()
+
+        self._normal_video_style: str = "background: #101418; color: #d7dbe0; border-radius: 8px;"
+        self._anomaly_video_style: str = "background: #101418; color: #d7dbe0; border-radius: 8px; border: 2px solid #d21919;"
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
-        self._overlay.setGeometry(self._video_label.rect())
+        if self._overlay.isVisible():
+            self._overlay.move(12, 12)
 
     @pyqtSlot(object, object)
     def update_frame(self, frame: np.ndarray, detections: Sequence[Detection]) -> None:
+        # Debug: log incoming detections and current missing equipment
+        labels = [d.label for d in detections]
+        LOGGER.debug("%s: update_frame - labels=%s missing=%s", self.stream_id, labels, self._missing_equipment)
+
         # Pass current missing_equipment so person boxes turn red on anomaly
         rendered: np.ndarray = draw_detections(frame, detections, self._missing_equipment)
         rgb_frame: np.ndarray = cv2.cvtColor(rendered, cv2.COLOR_BGR2RGB)
@@ -87,15 +99,36 @@ class StreamCell(QWidget):
         self._status_label.setText(f"Status: {status}")
         self._status_label.setStyleSheet(f"font-size: 12px; color: {color};")
 
-    @pyqtSlot(object)
-    def show_anomaly(self, missing_items: Sequence[str]) -> None:
+    @pyqtSlot(object, object)
+    def show_anomaly(self, missing_items: Sequence[str], observed_items: Sequence[str] = ()) -> None:
+        # Ensure the missing equipment state is always updated and overlay refreshed
         self._missing_equipment = tuple(missing_items)
         if missing_items:
-            self._overlay.show_message(f"Missing: {', '.join(missing_items)}")
+            normalized_items = [item.strip().lower().replace(" ", "_") for item in missing_items]
+            fall_detected = any(item in {"fall-detected", "fall_detected"} for item in normalized_items)
+            missing_equipment = [item for item in missing_items if item.strip().lower().replace(" ", "_") not in {"fall-detected", "fall_detected"}]
+
+            message_parts: list[str] = []
+            if fall_detected:
+                message_parts.append("Fall detected")
+            if missing_equipment:
+                message_parts.append(f"Missing: {', '.join(missing_equipment)}")
+
+            overlay_message = " | ".join(message_parts) if message_parts else "Anomaly detected"
+            self._overlay.show_message(overlay_message)
+            self._video_label.setStyleSheet(self._anomaly_video_style)
+            self._overlay.move(12, 12)
+            # Force repaint of overlay and parent
+            self._overlay.update()
+            self._video_label.update()
         else:
             self._overlay.clear_message()
+            self._video_label.setStyleSheet(self._normal_video_style)
+            self._overlay.update()
+            self._video_label.update()
 
     @pyqtSlot()
     def clear_anomaly(self) -> None:
         self._missing_equipment = ()
         self._overlay.clear_message()
+        self._video_label.setStyleSheet(self._normal_video_style)

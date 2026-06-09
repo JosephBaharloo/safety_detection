@@ -7,21 +7,22 @@ import numpy as np
 
 from core.detector import Detection
 
-_COLOR_NORMAL: tuple[int, int, int] = (0, 220, 0)   # green
-_COLOR_ANOMALY: tuple[int, int, int] = (0, 50, 220)  # red
+_COLOR_PERSON: tuple[int, int, int] = (220, 180, 0)   # blue-ish
+_COLOR_HARDHAT: tuple[int, int, int] = (0, 200, 0)    # green
+_COLOR_VEST: tuple[int, int, int] = (0, 180, 220)     # yellow/cyan
+_COLOR_FALL: tuple[int, int, int] = (0, 50, 220)      # red
+_COLOR_UNKNOWN: tuple[int, int, int] = (180, 180, 180) # gray
 
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 _FONT_SCALE = 0.6
 _THICKNESS = 2
 
-_KNOWN_LABELS: frozenset[str] = frozenset({
-    "person", "Hardhat", "NO-Hardhat",
-    "safety_vest", "no_safety_vest", "Fall-Detected",
-})
+_PERSON_LABELS: frozenset[str] = frozenset({"person"})
+_FALL_LABELS: frozenset[str] = frozenset({"fall-detected", "fall_detected"})
 
-_VIOLATION_LABELS: frozenset[str] = frozenset({
-    "NO-Hardhat", "no_safety_vest", "Fall-Detected",
-})
+
+def _normalize_label(label: str) -> str:
+    return label.strip().replace(" ", "_").lower()
 
 
 def draw_detections(
@@ -31,21 +32,33 @@ def draw_detections(
 ) -> np.ndarray:
     output: np.ndarray = frame.copy()
 
+    # If there are missing equipment items (an active alarm), show banner
+    if missing_equipment:
+        banner_text = f"Missing: {', '.join(missing_equipment)}"
+        (bw, bh), bbase = cv2.getTextSize(banner_text, _FONT, _FONT_SCALE, _THICKNESS)
+        cv2.rectangle(output, (2, 2), (bw + 12, bh + 12), _COLOR_FALL, cv2.FILLED)
+        cv2.putText(output, banner_text, (6, bh + 2), _FONT, _FONT_SCALE, (255, 255, 255), _THICKNESS, cv2.LINE_AA)
+
     for detection in detections:
-        if detection.label not in _KNOWN_LABELS:
-            continue
-
         x1, y1, x2, y2 = detection.bbox
+        normalized_label = _normalize_label(detection.label)
 
-        # Violation labels → red, everything else → green
-        color = _COLOR_ANOMALY if detection.label in _VIOLATION_LABELS else _COLOR_NORMAL
+        if normalized_label in _PERSON_LABELS:
+            color = _COLOR_PERSON
+        elif normalized_label in {"hardhat"}:
+            color = _COLOR_HARDHAT
+        elif normalized_label in {"safety_vest"}:
+            color = _COLOR_VEST
+        elif normalized_label in _FALL_LABELS:
+            color = _COLOR_FALL
+        else:
+            color = _COLOR_UNKNOWN
 
         cv2.rectangle(output, (x1, y1), (x2, y2), color, _THICKNESS)
 
-        label_text: str = f"{detection.label} {detection.confidence:0%}"
-        (text_w, text_h), baseline = cv2.getTextSize(
-            label_text, _FONT, _FONT_SCALE, _THICKNESS
-        )
+        # Display confidence as percentage (no decimals)
+        label_text: str = f"{detection.label} {detection.confidence:.0%}"
+        (text_w, text_h), baseline = cv2.getTextSize(label_text, _FONT, _FONT_SCALE, _THICKNESS)
         label_y: int = max(text_h + 8, y1 - 4)
         cv2.rectangle(
             output,

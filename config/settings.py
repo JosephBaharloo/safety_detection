@@ -22,7 +22,7 @@ class StreamConfig:
 @dataclass(frozen=True)
 class DetectorSettings:
     model_path: Path
-    confidence_threshold: float = 0.25
+    confidence_threshold: float = 0.20
     iou_threshold: float = 0.5
     image_size: int = 640
 
@@ -118,7 +118,7 @@ def build_default_settings() -> AppSettings:
 
     detector_settings: DetectorSettings = DetectorSettings(
         model_path=model_path,
-        confidence_threshold=0.45,
+        confidence_threshold=0.20,
         iou_threshold=0.5,
         image_size=640,
     )

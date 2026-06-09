@@ -126,7 +126,8 @@ class SafetyDetectionController(QObject):
             return NullDetector()
 
     def _on_anomaly_detected(self, event: AnomalyEvent) -> None:
-        self._window.show_anomaly(event.stream_id, event.missing_equipment)
+        LOGGER.info("Controller received anomaly for %s: missing=%s observed=%s", event.stream_id, event.missing_equipment, event.observed_equipment)
+        self._window.show_anomaly(event.stream_id, event.missing_equipment, event.observed_equipment)
         message: str = (
             f"{event.stream_name}: missing {', '.join(event.missing_equipment)}"
             if event.missing_equipment

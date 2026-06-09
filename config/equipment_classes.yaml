@@ -1,11 +1,9 @@
 names:
   0: Fall-Detected
   1: Hardhat
-  2: NO-Hardhat
-  3: no_safety_vest
-  4: person
-  5: safety_vest
+  2: Person
+  3: Safety_Vest
 
 required_by_default:
   - Hardhat
-  - safety_vest
+  - Safety_Vest

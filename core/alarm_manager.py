@@ -87,16 +87,14 @@ class AlarmManager(QObject):
     def _on_anomaly_detected(self, event: AnomalyEvent) -> None:
         self._active_streams.add(event.stream_id)
 
+        anomaly_type: str = self._classify_anomaly(event.missing_equipment)
+
         # FR-3.4 — cooldown check
         now: float = monotonic()
         last: float = self._last_alert_time.get(event.stream_id, 0.0)
         within_cooldown: bool = (now - last) < self._cooldown_seconds
 
-        message: str = (
-            f"ALERT: {event.stream_name} missing {', '.join(event.missing_equipment)}"
-            if event.missing_equipment
-            else f"ALERT: {event.stream_name}"
-        )
+        message: str = self._build_alert_message(event.stream_name, event.missing_equipment)
         self.alarm_state_changed.emit(True, message)
 
         if not within_cooldown:
@@ -109,7 +107,7 @@ class AlarmManager(QObject):
                 saved = self._screenshot_manager.capture(
                     frame=frame,
                     stream_id=event.stream_id,
-                    anomaly_type="missing_ppe",
+                    anomaly_type=anomaly_type,
                 )
                 screenshot_path = str(saved) if saved else ""
 
@@ -117,7 +115,7 @@ class AlarmManager(QObject):
             self._event_log.log_anomaly(
                 camera_id=event.stream_id,
                 camera_name=event.stream_name,
-                anomaly_type="missing_ppe",
+                anomaly_type=anomaly_type,
                 missing_equipment=event.missing_equipment,
                 observed_equipment=event.observed_equipment,
                 confidence=0.0,
@@ -143,3 +141,31 @@ class AlarmManager(QObject):
         message = f"ALERT: {event.stream_name} — {event.message}"
         self.alarm_state_changed.emit(True, message)
         LOGGER.warning("Stream error: %s", message)
+
+    @staticmethod
+    def _classify_anomaly(missing_equipment: tuple[str, ...]) -> str:
+        normalized: set[str] = {item.strip().lower().replace(" ", "_") for item in missing_equipment}
+        fall_labels: set[str] = {"fall-detected", "fall_detected"}
+        if normalized & fall_labels:
+            return "fall_detected"
+        return "missing_ppe"
+
+    @staticmethod
+    def _build_alert_message(stream_name: str, missing_equipment: tuple[str, ...]) -> str:
+        normalized: set[str] = {item.strip().lower().replace(" ", "_") for item in missing_equipment}
+        fall_labels: set[str] = {"fall-detected", "fall_detected"}
+
+        parts: list[str] = []
+        if normalized & fall_labels:
+            parts.append(f"ALERT: {stream_name} FALL DETECTED")
+
+        missing_ppe: list[str] = [
+            item for item in missing_equipment
+            if item.strip().lower().replace(" ", "_") not in fall_labels
+        ]
+        if missing_ppe:
+            parts.append(f"ALERT: {stream_name} missing {', '.join(missing_ppe)}")
+
+        if parts:
+            return " | ".join(parts)
+        return f"ALERT: {stream_name}"

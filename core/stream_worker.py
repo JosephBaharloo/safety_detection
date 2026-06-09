@@ -26,11 +26,14 @@ STREAM_ERROR_TOPIC = "stream.error"
 _TARGET_FPS: float = 30.0
 _FRAME_INTERVAL: float = 1.0 / _TARGET_FPS
 
-_VIOLATION_LABELS: frozenset[str] = frozenset({
-    "NO-Hardhat",
-    "no_safety_vest",
-    "Fall-Detected",
-})
+_MISSING_DEBOUNCE_FRAMES: int = 8
+_FALL_DEBOUNCE_FRAMES: int = 2
+_CLEAR_DEBOUNCE_FRAMES: int = 10
+
+_PERSON_LABELS: frozenset[str] = frozenset({"Person", "person"})
+_HARDHAT_LABELS: frozenset[str] = frozenset({"Hardhat", "hardhat"})
+_VEST_LABELS: frozenset[str] = frozenset({"Safety_Vest", "safety_vest", "Safety Vest", "safety vest"})
+_FALL_LABELS: frozenset[str] = frozenset({"Fall-Detected", "fall-detected", "Fall_Detected"})
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,10 @@ class StreamWorker(QThread):
         self._event_bus = event_bus
         self._stop_requested: Event = Event()
         self._anomaly_active: bool = False
+        self._missing_streak: int = 0
+        self._fall_streak: int = 0
+        self._clear_streak: int = 0
+        self._last_missing: tuple[str, ...] = ()
 
     def run(self) -> None:
         self._stop_requested.clear()
@@ -117,11 +124,57 @@ class StreamWorker(QThread):
         self._stop_requested.set()
 
     def _evaluate_anomaly(self, detections: list[Detection]) -> None:
-        missing: tuple[str, ...] = self._get_missing_equipment(detections)
-        observed: tuple[str, ...] = tuple(sorted({d.label for d in detections}))
+        detected_labels = {d.label for d in detections}
+        observed: tuple[str, ...] = tuple(sorted(detected_labels))
+
+        is_person_present = any(label in _PERSON_LABELS for label in detected_labels)
+        has_hardhat = any(label in _HARDHAT_LABELS for label in detected_labels)
+        has_vest = any(label in _VEST_LABELS for label in detected_labels)
+        has_fall = any(label in _FALL_LABELS for label in detected_labels)
+
+        missing_items: list[str] = []
+        if is_person_present:
+            if not has_hardhat:
+                missing_items.append("Hardhat")
+            if not has_vest:
+                missing_items.append("Safety_Vest")
+
+        fall_missing: tuple[str, ...] = ()
+        if is_person_present and has_fall:
+            fall_missing = ("Fall-Detected",)
+
+        missing: tuple[str, ...] = tuple(missing_items) or fall_missing
+
+        if fall_missing:
+            self._missing_streak = 0
+            self._last_missing = fall_missing
+            self._fall_streak += 1
+            if not self._anomaly_active and self._fall_streak >= _FALL_DEBOUNCE_FRAMES:
+                self._anomaly_active = True
+                LOGGER.warning("%s: ANOMALY DETECTED - violations: %s", self._stream_config.stream_id, fall_missing)
+                self._event_bus.publish(
+                    ANOMALY_DETECTED_TOPIC,
+                    AnomalyEvent(
+                        stream_id=self._stream_config.stream_id,
+                        stream_name=self._stream_config.display_name,
+                        missing_equipment=fall_missing,
+                        observed_equipment=observed,
+                        timestamp_utc=self._timestamp_utc(),
+                    ),
+                )
+            return
+
+        self._fall_streak = 0
 
         if missing:
-            if not self._anomaly_active:
+            self._clear_streak = 0
+            if missing == self._last_missing:
+                self._missing_streak += 1
+            else:
+                self._last_missing = missing
+                self._missing_streak = 1
+
+            if not self._anomaly_active and self._missing_streak >= _MISSING_DEBOUNCE_FRAMES:
                 self._anomaly_active = True
                 LOGGER.warning("%s: ANOMALY DETECTED - violations: %s", self._stream_config.stream_id, missing)
                 self._event_bus.publish(
@@ -134,9 +187,15 @@ class StreamWorker(QThread):
                         timestamp_utc=self._timestamp_utc(),
                     ),
                 )
-        else:
-            if self._anomaly_active:
+            return
+
+        self._missing_streak = 0
+        self._last_missing = ()
+        if self._anomaly_active:
+            self._clear_streak += 1
+            if self._clear_streak >= _CLEAR_DEBOUNCE_FRAMES:
                 self._anomaly_active = False
+                self._clear_streak = 0
                 LOGGER.info("%s: Anomaly cleared", self._stream_config.stream_id)
                 self._event_bus.publish(
                     ANOMALY_CLEARED_TOPIC,
@@ -148,9 +207,6 @@ class StreamWorker(QThread):
                         timestamp_utc=self._timestamp_utc(),
                     ),
                 )
-
-    def _get_missing_equipment(self, detections: list[Detection]) -> tuple[str, ...]:
-        return tuple(d.label for d in detections if d.label in _VIOLATION_LABELS)
 
     def _build_state_event(self, state: str, message: str) -> StreamStateEvent:
         return StreamStateEvent(
@@ -177,7 +233,3 @@ class StreamWorkerFactory:
     def create(self, stream_config: StreamConfig) -> StreamWorker:
         detector = self._detector_builder(stream_config)
         return StreamWorker(stream_config=stream_config, detector=detector, event_bus=self._event_bus)
-    def _evaluate_anomaly(self, detections: list[Detection]) -> None:
-    # GEÇİCİ DEBUG
-        if detections:
-            print(f"[DEBUG] {self._stream_config.stream_id}: {[(d.label, round(d.confidence,2)) for d in detections]}")
