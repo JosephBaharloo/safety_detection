@@ -1,34 +1,37 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSlot
-from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QLabel, QWidget
 
-
-class AlarmOverlay(QFrame):
+class AlarmOverlay(QLabel):
     """Visual overlay displayed on top of a stream when anomaly exists."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        
+        # Click-through transparency
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        
+        # Center the text
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Apply ALL styling directly to the label. No cascading possible.
         self.setStyleSheet(
-            "QFrame { background-color: rgba(210, 25, 25, 220); border-radius: 6px; }"
+            "QLabel {"
+            "  background-color: rgba(210, 25, 25, 220);"
+            "  border-radius: 6px;"
+            "  color: white;"
+            "  font-size: 14px;"
+            "  font-weight: 700;"
+            "  padding: 6px 10px;" 
+            "}"
         )
-
-        self._label: QLabel = QLabel(self)
-        self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._label.setStyleSheet(
-            "color: white; font-size: 14px; font-weight: 700; padding: 4px 6px;"
-        )
-
-        layout: QVBoxLayout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.addWidget(self._label)
 
         self.hide()
 
     @pyqtSlot(str)
     def show_message(self, message: str) -> None:
-        self._label.setText(message)
+        self.setText(message)
         self.adjustSize()
         self.show()
 

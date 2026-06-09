@@ -57,8 +57,6 @@ coverage.xml
 Thumbs.db
  
 # Model binaries
-/models/*.pt
-
-/logs
+#/models/*.pt
 
 *.docx

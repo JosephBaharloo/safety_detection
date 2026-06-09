@@ -32,13 +32,6 @@ def draw_detections(
 ) -> np.ndarray:
     output: np.ndarray = frame.copy()
 
-    # If there are missing equipment items (an active alarm), show banner
-    if missing_equipment:
-        banner_text = f"Missing: {', '.join(missing_equipment)}"
-        (bw, bh), bbase = cv2.getTextSize(banner_text, _FONT, _FONT_SCALE, _THICKNESS)
-        cv2.rectangle(output, (2, 2), (bw + 12, bh + 12), _COLOR_FALL, cv2.FILLED)
-        cv2.putText(output, banner_text, (6, bh + 2), _FONT, _FONT_SCALE, (255, 255, 255), _THICKNESS, cv2.LINE_AA)
-
     for detection in detections:
         x1, y1, x2, y2 = detection.bbox
         normalized_label = _normalize_label(detection.label)
