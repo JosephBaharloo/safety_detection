@@ -42,7 +42,7 @@ def draw_detections(
 
         cv2.rectangle(output, (x1, y1), (x2, y2), color, _THICKNESS)
 
-        label_text: str = f"{detection.label} {detection.confidence:.2f}"
+        label_text: str = f"{detection.label} {detection.confidence:0%}"
         (text_w, text_h), baseline = cv2.getTextSize(
             label_text, _FONT, _FONT_SCALE, _THICKNESS
         )

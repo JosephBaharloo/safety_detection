@@ -22,7 +22,7 @@ class StreamConfig:
 @dataclass(frozen=True)
 class DetectorSettings:
     model_path: Path
-    confidence_threshold: float = 0.45
+    confidence_threshold: float = 0.25
     iou_threshold: float = 0.5
     image_size: int = 640
 
@@ -61,9 +61,10 @@ def load_equipment_classes(path: Path | None = None) -> tuple[dict[int, str], tu
     return class_map, required_by_default
 
 def _resolve_model_path() -> Path:
-    best_pt: Path = MODELS_DIR / "epoch50.pt"
-    if best_pt.exists() and best_pt.stat().st_size > _MIN_MODEL_SIZE_BYTES:
-        return best_pt
+    """Resolves the path to the YOLOv8 model file, prioritizing the best custom model."""
+    best_model: Path = MODELS_DIR / "my_best_model.pt"
+    if best_model.exists() and best_model.stat().st_size > _MIN_MODEL_SIZE_BYTES:
+        return best_model
 
     yolov8n_local: Path = MODELS_DIR / "yolov8n.pt"
     if yolov8n_local.exists() and yolov8n_local.stat().st_size > _MIN_MODEL_SIZE_BYTES:
