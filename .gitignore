@@ -59,6 +59,6 @@ Thumbs.db
 # Model binaries
 /models/*.pt
 
-logs/
+/logs/
 
 *.docx
