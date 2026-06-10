@@ -41,7 +41,7 @@ class VideoSource:
         self._failed_reads: int = 0
         self._reconnect_count: int = 0
 
-   
+
     def open(self) -> bool:
         """Open the video source. Returns True on success."""
         self._capture = cv2.VideoCapture(self._source)
@@ -53,6 +53,22 @@ class VideoSource:
             self._failed_reads = 0
             self._reconnect_count = 0
         return is_open
+
+    @property
+    def fps(self) -> float:
+        """Return the native FPS of the video source, or 30.0 as fallback."""
+        if self._capture is None:
+            return 30.0
+        native_fps: float = self._capture.get(cv2.CAP_PROP_FPS)
+        if native_fps <= 0:
+            return 30.0
+        return native_fps
+
+    def grab(self) -> bool:
+        """Grab the next frame without decoding it (used to skip frames)."""
+        if self._capture is None:
+            return False
+        return bool(self._capture.grab())
 
     def read(self) -> np.ndarray | None:
         """Read the next frame.

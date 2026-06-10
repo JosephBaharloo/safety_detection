@@ -23,9 +23,6 @@ STREAM_STARTED_TOPIC = "stream.started"
 STREAM_STOPPED_TOPIC = "stream.stopped"
 STREAM_ERROR_TOPIC = "stream.error"
 
-_TARGET_FPS: float = 30.0
-_FRAME_INTERVAL: float = 1.0 / _TARGET_FPS
-
 _MISSING_DEBOUNCE_FRAMES: int = 8
 _FALL_DEBOUNCE_FRAMES: int = 2
 _CLEAR_DEBOUNCE_FRAMES: int = 10
@@ -88,15 +85,37 @@ class StreamWorker(QThread):
         self.status_changed.emit(self._stream_config.stream_id, "running")
         self._event_bus.publish(STREAM_STARTED_TOPIC, self._build_state_event("running", "stream started"))
 
-        try:
-            frame_count = 0
-            while not self._stop_requested.is_set():
-                t0 = time.monotonic()
+        # Use the video's native FPS so playback matches real-time speed.
+        native_fps: float = source.fps
+        frame_interval: float = 1.0 / native_fps
+        LOGGER.info("Source FPS=%.1f  frame_interval=%.4fs for %s", native_fps, frame_interval, self._stream_config.source)
 
+        try:
+            frame_count: int = 0
+            wall_start: float = time.monotonic()
+            video_frame_index: int = 0  # counts every frame (including skipped)
+
+            while not self._stop_requested.is_set():
+                # --- determine how many frames the video *should* have
+                # advanced by now, based on wall-clock time ---------------
+                wall_elapsed: float = time.monotonic() - wall_start
+                target_frame: int = int(wall_elapsed * native_fps)
+
+                # Skip (grab without decode) frames we've fallen behind on
+                frames_behind: int = target_frame - video_frame_index
+                if frames_behind > 1:
+                    skips: int = frames_behind - 1  # keep 1 to actually decode
+                    for _ in range(skips):
+                        if not source.grab():
+                            break
+                        video_frame_index += 1
+
+                # Read & decode the current frame
                 frame: np.ndarray | None = source.read()
                 if frame is None:
-                    time.sleep(0.01)
+                    time.sleep(0.005)
                     continue
+                video_frame_index += 1
 
                 detections: list[Detection] = self._detector.detect(frame)
                 frame_count += 1
@@ -106,8 +125,9 @@ class StreamWorker(QThread):
                 self.frame_ready.emit(self._stream_config.stream_id, frame, detections)
                 self._evaluate_anomaly(detections)
 
-                elapsed = time.monotonic() - t0
-                sleep_for = _FRAME_INTERVAL - elapsed
+                # Sleep only if we're ahead of real-time
+                next_frame_time: float = wall_start + video_frame_index * frame_interval
+                sleep_for: float = next_frame_time - time.monotonic()
                 if sleep_for > 0:
                     time.sleep(sleep_for)
 
